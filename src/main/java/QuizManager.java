@@ -20,7 +20,7 @@ public class QuizManager {
     private List<Questions> currentQuizQuestions;
 
     //  CONSTRUCTOR
-    public QuizManager() {
+    public QuizManager(Object o) {
         this.questionBank = new ArrayList<>();
         this.currentScore = 0;
         this.currentQuizQuestions = new ArrayList<>();
