@@ -51,4 +51,8 @@ public class MultipleChoiceQuestion extends Questions {
 
         return false;
     }
+    // Added for GUI support
+    public String[] getOptions() {
+        return options;
+    }
 }
