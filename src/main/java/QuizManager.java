@@ -1,14 +1,7 @@
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Central manager class that orchestrates the quiz application.
- * - Manages the quiz flow (Start, Answer, End).
- * - Delegates data storage to QuestionBank.
- * - Delegates validation to the Questions class.
- */
 public class QuizManager {
 
     // ATTRIBUTES
@@ -16,40 +9,36 @@ public class QuizManager {
     private int currentScore;
     private String userName;
     private Difficulty selectedDifficulty;
-    // private PersistenceManager persistenceManager;
+    private PersistenceManager persistenceManager;
     private List<Questions> currentQuizQuestions;
 
-    //  CONSTRUCTOR
-    public QuizManager(Object o) {
+    // CONSTRUCTOR
+    public QuizManager() {
         this.questionBank = new ArrayList<>();
         this.currentScore = 0;
         this.currentQuizQuestions = new ArrayList<>();
 
-        // Waiting for Vera
-        // this.persistenceManager = new PersistenceManager();
-        // this.persistenceManager.initializeDatabase();
+        // Initialize Database connection
+        this.persistenceManager = new PersistenceManager();
+        try {
+            this.persistenceManager.initializeDatabase();
+        } catch (Exception e) {
+            System.err.println("Warning: Database init failed: " + e.getMessage());
+        }
     }
 
     // Constructor for testing (allows mocking PersistenceManager)
-    /*
     public QuizManager(PersistenceManager pm) {
         this.questionBank = new ArrayList<>();
         this.currentScore = 0;
         this.persistenceManager = pm;
         this.currentQuizQuestions = new ArrayList<>();
     }
-    */
+
     // LOGIC: LOADING QUESTIONS
-
-    /**
-     * Loads questions from the static QuestionBank utility class.
-     * This keeps the Manager clean and focused on logic, not data storage.
-     */
     public void loadQuestions() {
-        // Retrieve the single, unified list of all questions from the dedicated bank
         questionBank = QuestionBank.getAllQuestions();
-
-        if (questionBank.isEmpty()) {
+        if (questionBank == null || questionBank.isEmpty()) {
             System.err.println("FATAL: Question bank failed to load! Check QuestionBank.java.");
         } else {
             System.out.println("Loaded " + questionBank.size() + " questions from QuestionBank.");
@@ -57,7 +46,6 @@ public class QuizManager {
     }
 
     // LOGIC: QUIZ FLOW
-
     public void startQuiz(String userName, Difficulty difficulty) {
         if (userName == null || userName.trim().isEmpty()) {
             throw new IllegalArgumentException("User name cannot be null or empty");
@@ -73,7 +61,6 @@ public class QuizManager {
         this.selectedDifficulty = difficulty;
         this.currentScore = 0;
 
-        // Filter using getDifficultyLevel()"
         this.currentQuizQuestions = questionBank.stream()
                 .filter(q -> q.getDifficultyLevel() == difficulty)
                 .collect(Collectors.toList());
@@ -92,8 +79,6 @@ public class QuizManager {
         }
 
         Questions question = currentQuizQuestions.get(questionIndex);
-
-
         boolean isCorrect = question.checkAnswer(userAnswer);
 
         if (isCorrect) {
@@ -102,51 +87,39 @@ public class QuizManager {
         return isCorrect;
     }
 
-    // LOGIC: PERSISTENCE (Wrappers)
+    // LOGIC: PERSISTENCE
 
     public void recordScore() {
         if (userName == null) throw new IllegalStateException("No quiz played");
 
-        // When Vera is Ready
-        /*
         UserScoreRecord record = new UserScoreRecord(
-            userName,
-            currentScore,
-            selectedDifficulty,
-            System.currentTimeMillis()
+                userName,
+                currentScore,
+                selectedDifficulty,
+                System.currentTimeMillis()
         );
-        persistenceManager.saveScore(record);
-        */
+
+        try {
+            persistenceManager.saveScore(record);
+            System.out.println("Score recorded successfully for " + userName);
+        } catch (Exception e) {
+            System.err.println("Failed to record score: " + e.getMessage());
+        }
     }
 
-    /*
     public List<UserScoreRecord> getLeaderboard() {
-        // UNCOMMENT THIS WHEN DEV 2 IS READY
-        // return persistenceManager.loadAllScores();
-        return new ArrayList<>(); // Temporary placeholder
+        try {
+            return persistenceManager.loadAllScores();
+        } catch (Exception e) {
+            System.err.println("Failed to load leaderboard: " + e.getMessage());
+            return new ArrayList<>();
+        }
     }
-
-     */
 
     // GETTERS
-
-    public int getCurrentScore() {
-        return currentScore;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public List<Questions> getCurrentQuizQuestions() {
-        return new ArrayList<>(currentQuizQuestions);
-    }
-
-    public Questions getQuestion(int index) {
-        return currentQuizQuestions.get(index);
-    }
-
-    public int getTotalQuestions() {
-        return currentQuizQuestions == null ? 0 : currentQuizQuestions.size();
-    }
+    public int getCurrentScore() { return currentScore; }
+    public String getUserName() { return userName; }
+    public List<Questions> getCurrentQuizQuestions() { return new ArrayList<>(currentQuizQuestions); }
+    public Questions getQuestion(int index) { return currentQuizQuestions.get(index); }
+    public int getTotalQuestions() { return currentQuizQuestions == null ? 0 : currentQuizQuestions.size(); }
 }
