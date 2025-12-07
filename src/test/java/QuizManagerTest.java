@@ -7,24 +7,46 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Comprehensive tests for QuizManager.
- *
+ * Covers core logic (filtering, scoring) AND database integration.
  */
 class QuizManagerTest {
 
     private static final String TEST_DB_FILE = "test_quiz_manager.db";
     private QuizManager quizManager;
+    private PersistenceManager testPersistenceManager;
 
     @BeforeEach
     void setUp() {
-        quizManager = new QuizManager(null);
+        // Clean up old test DB to ensure fresh start
+        File dbFile = new File(TEST_DB_FILE);
+        if (dbFile.exists()) {
+            dbFile.delete();
+        }
+
+        // Initialize REAL PersistenceManager for testing
+        testPersistenceManager = new PersistenceManager(TEST_DB_FILE);
+        testPersistenceManager.initializeDatabase();
+
+        // Pass it to the Manager
+        quizManager = new QuizManager(testPersistenceManager);
         quizManager.loadQuestions();
     }
 
-    // QUESTION LOADING TESTS
+    @AfterEach
+    void tearDown() {
+        // Clean up the database file after tests run
+        File dbFile = new File(TEST_DB_FILE);
+        if (dbFile.exists()) {
+            dbFile.delete();
+        }
+    }
+
+    // ========== QUESTION LOADING TESTS ==========
 
     @Test
     @DisplayName("loadQuestions should populate question bank")
     void testLoadQuestions() {
+        // We verify loading by ensuring startQuiz doesn't throw an "Empty Bank" exception
         assertDoesNotThrow(() -> quizManager.startQuiz("Tester", Difficulty.EASY));
         assertDoesNotThrow(() -> quizManager.startQuiz("Tester", Difficulty.HARD));
     }
@@ -91,11 +113,10 @@ class QuizManagerTest {
         quizManager.answerQuestion(0, correctAns);
         assertTrue(quizManager.getCurrentScore() > 0);
 
-        // Second quiz
+        // Second quiz should start at 0
         quizManager.startQuiz("Bob", Difficulty.HARD);
         assertEquals(0, quizManager.getCurrentScore());
     }
-
 
     // ANSWER QUESTION TESTS
 
@@ -144,7 +165,8 @@ class QuizManagerTest {
     @Test
     @DisplayName("answerQuestion should throw exception if no quiz started")
     void testAnswerQuestionNoQuiz() {
-        QuizManager newManager = new QuizManager(null);
+        // Create a separate instance for this test to avoid setUp() state
+        QuizManager newManager = new QuizManager(testPersistenceManager);
         newManager.loadQuestions();
 
         assertThrows(IllegalStateException.class, () ->
@@ -163,32 +185,7 @@ class QuizManagerTest {
                 quizManager.answerQuestion(1000, "Answer"));
     }
 
-
-    // SCORE RECORDING TESTS (DISABLED)
-
-    @Test
-    @DisplayName("recordScore should be safe to call even without Database")
-    void testRecordScoreSafety() {
-        quizManager.startQuiz("Alice", Difficulty.EASY);
-        // Should not throw exception even if DB is disabled (logic inside QuizManager handles it)
-        assertDoesNotThrow(() -> quizManager.recordScore());
-    }
-
-    /* * DISABLED UNTIL Vera's MERGES PERSISTENCE MANAGER
-     * @Test
-    @DisplayName("recordScore should save correct score")
-    void testRecordScoreCorrectValue() {
-        quizManager.startQuiz("Bob", Difficulty.EASY);
-        for (int i = 0; i < 3; i++) {
-            quizManager.answerQuestion(i, quizManager.getQuestion(i).getCorrectAnswer());
-        }
-        quizManager.recordScore();
-        List<UserScoreRecord> scores = quizManager.getLeaderboard();
-        assertEquals(3, scores.get(0).getScore());
-    }
-    */
-
-    //  GETTER TESTS
+    // GETTER TESTS
 
     @Test
     @DisplayName("getTotalQuestions should return correct count")
@@ -225,7 +222,7 @@ class QuizManagerTest {
         assertEquals(originalSize, quizManager.getCurrentQuizQuestions().size());
     }
 
-    // POLYMORPHISM TESTS
+    //  POLYMORPHISM TESTS
 
     @Test
     @DisplayName("Polymorphism should work for different question types")
@@ -238,5 +235,49 @@ class QuizManagerTest {
             boolean result = q.checkAnswer(q.getCorrectAnswer());
             assertTrue(result, "CheckAnswer should return true for correct answer");
         }
+    }
+
+    // DATABASE INTEGRATION TESTS
+
+    @Test
+    @DisplayName("recordScore should save to actual database")
+    void testRecordScoreIntegration() {
+        quizManager.startQuiz("IntegrationTester", Difficulty.EASY);
+
+        // Answer one question correctly
+        Questions q = quizManager.getQuestion(0);
+        quizManager.answerQuestion(0, q.getCorrectAnswer());
+
+        // Save
+        assertDoesNotThrow(() -> quizManager.recordScore());
+
+        // Verify via PersistenceManager directly to ensure it hit the DB
+        List<UserScoreRecord> scores = testPersistenceManager.loadAllScores();
+        assertFalse(scores.isEmpty());
+        assertEquals("IntegrationTester", scores.get(0).getUserName());
+        assertEquals(1, scores.get(0).getScore());
+    }
+
+    @Test
+    @DisplayName("getLeaderboard should return sorted scores from DB")
+    void testGetLeaderboardIntegration() {
+
+
+        // 1. Low Score
+        quizManager.startQuiz("LowScorer", Difficulty.EASY);
+        quizManager.recordScore(); // Score 0
+
+        // 2. High Score
+        quizManager.startQuiz("HighScorer", Difficulty.EASY);
+        Questions q = quizManager.getQuestion(0);
+        quizManager.answerQuestion(0, q.getCorrectAnswer()); // Score 1
+        quizManager.recordScore();
+
+        // Retrieve via QuizManager
+        List<UserScoreRecord> leaderboard = quizManager.getLeaderboard();
+
+        assertEquals(2, leaderboard.size());
+        assertEquals("HighScorer", leaderboard.get(0).getUserName()); // High score first
+        assertEquals("LowScorer", leaderboard.get(1).getUserName());  // Low score second
     }
 }
