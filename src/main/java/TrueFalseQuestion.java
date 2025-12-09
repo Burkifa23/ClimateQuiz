@@ -5,6 +5,10 @@ public class TrueFalseQuestion extends Questions {
 
     }
 
+    public String[] getTAndFOptions() {
+        return new String[] {"True", "False"};
+    }
+
     @Override
     public String displayQuestion() {
         return  "True or False?";
